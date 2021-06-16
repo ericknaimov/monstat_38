@@ -14,7 +14,7 @@ from PyQt5.QtCore import pyqtSignal as Signal
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QMainWindow, QTextEdit, QApplication, QSystemTrayIcon, QAction, qApp, QMenu
 from plyer import notification
-from psycopg2 import OperationalError
+# from psycopg2 import OperationalError
 red_color = "style='color:#FF0000'"
 green_color = "style='color:#006262'"
 states = []
