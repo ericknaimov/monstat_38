@@ -525,7 +525,7 @@ def watch_urs_conf_update():
 
 if __name__ == '__main__':
     get_processes_by_name = lambda t: filter(lambda p: p.name() == t,psutil.process_iter())
-    getc = len(list(get_processes_by_name("StateStat.exe")))
+    getc = len(list(get_processes_by_name("statestat.exe")))
     if getc > 1:
         create_notif("Приложение уже запущено", "TR-Soft StateStat", "trns.ico", 3)
         raise SystemExit
