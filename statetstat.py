@@ -9,12 +9,13 @@ import socket
 import psutil
 import datetime
 import psycopg2
+from sys import exit
 from PyQt5.QtCore import QObject, QTimer
 from PyQt5.QtCore import pyqtSignal as Signal
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QMainWindow, QTextEdit, QApplication, QSystemTrayIcon, QAction, qApp, QMenu
 from plyer import notification
-from psycopg2 import OperationalError
+# from psycopg2 import OperationalError
 red_color = "style='color:#FF0000'"
 green_color = "style='color:#006262'"
 states = []
@@ -70,13 +71,14 @@ if (os.path.exists(conf_path)):
     if (os.path.exists(f"{from_setup_path}/UrsStatusPlugin.dat")):
         from_setup_path_file = os.path.normpath(f"{from_setup_path}/UrsStatusPlugin.dat")
         from_setup_path_file = from_setup_path_file.replace('\\', '/')
-        print(from_setup_path_file)
+        # print(from_setup_path_file)
         from_setup_path_sw = "1"
     else:
         from_setup_path_sw = "0"
 else:
     from_setup_path_sw = "0"
 
+# exit(0) # Выполнить до сюда
 
 now = datetime.datetime.now()
 current_time = now.strftime("%H:%M:%S")
@@ -182,6 +184,12 @@ CREATE TABLE IF NOT EXISTS StatusPluginTable (
 )
 """
 
+create_urs_table = """
+CREATE TABLE IF NOT EXISTS ursconf (
+  ursconf VARCHAR
+)
+"""
+
 create_stat_table = """
 CREATE TABLE IF NOT EXISTS statistic (  
   trstime VARCHAR, 
@@ -249,6 +257,7 @@ def pg_check():
                 )
                 execute_query(connection, create_status_table)
                 execute_query(connection, create_stat_table)
+                execute_query(connection, create_urs_table)
             else:
                 connection = False
                 states.append(f"<p {red_color}>Не удалось установить соединение с PostgreSQL! </p>"
@@ -403,7 +412,7 @@ def dothis():
             cursor.execute(qtodo)
             now = datetime.datetime.now()
             current_time = now.strftime("%H:%M:%S")
-            status.append(f"<p {green_color}>Сатусы обновлены_{current_time}</p>")
+            print(f"<p {green_color}>Сатусы обновлены_{current_time}</p>")
         else:
             states.append(f"<p {red_color}><u>{from_setup_path}</u> Папки н"
                           f"е существует. Настройте параметр <u>[path_conf]</u> в файле <u>settings.ini</u></p> ")
@@ -413,9 +422,6 @@ def dothis():
         print(f"<p {red_color}>Ошибка. Повторный опрос через 20 секунд</p>")
         time.sleep(20)
         dothis()
-
-    status_out = "</br>".join(status)
-    print(status_out)
 # Parse
 
 OUTPUT_LOGGER_STDOUT = OutputLogger(sys.stdout, OutputLogger.Severity.DEBUG)
@@ -477,6 +483,43 @@ def watch_file_update():
     else:
         states.append(f"<p {green_color}>Отслеживание UrsStatusPlugin.dat выключено</p>")
 
+def watch_urs_conf_update():
+    if (os.path.exists("C:/AvtoUraganConfigExport/UrsAutoExport.ini")):
+        states.append(f"<p {green_color}>Отслеживание UrsAutoExport.ini включено</p>")
+        timestamp = os.stat("C:/AvtoUraganConfigExport").st_mtime
+        while True:
+            if timestamp != os.stat("C:/AvtoUraganConfigExport").st_mtime:
+                with open("C:/AvtoUraganConfigExport/UrsAutoExport.ini") as file_in:
+                    text = file_in.read()
+                text = text.replace("[]", "[HEAD]")
+                with open("C:/AvtoUraganConfigExport/UrsAutoExport_tmp.ini", "w") as file_out:
+                    file_out.write(text)
+                config.read("C:/AvtoUraganConfigExport/UrsAutoExport_tmp.ini", encoding="cp1251")
+                urs_conf = []
+                urs_conf.append(f'sysnum={config["HEAD"]["Fact"]}')
+                urs_conf.append(f'place={config["HEAD"]["Place"]}')
+                urs_conf.append(f'lat={config["Gns"]["Lat"]}')
+                urs_conf.append(f'lon={config["Gns"]["Lon"]}')
+                urs_conf_db = "|".join(urs_conf)
+                cursor = connection.cursor()
+                query = "SELECT * from ursconf"
+                cursor.execute(query)
+                records = cursor.rowcount
+                if records > 0:
+                    qtodo = f"UPDATE ursconf SET ursconf = '{urs_conf_db}'"
+                else:
+                    qtodo = f"INSERT INTO ursconf (ursconf) VALUES ('{urs_conf_db}')"
+                cursor.execute(qtodo)
+                now = datetime.datetime.now()
+                current_time = now.strftime("%H:%M:%S")
+                print(f"<p {green_color}>Urs Config обновлен_{current_time}</p>")
+                os.remove("C:/AvtoUraganConfigExport/UrsAutoExport_tmp.ini")
+                timestamp = os.stat("C:/AvtoUraganConfigExport").st_mtime
+            else:
+                time.sleep(5)
+    else:
+        states.append(f"<p {green_color}>Отслеживание UrsAutoExport.ini выключено</p>")
+
 # Listen
 #states = '|'.join(states)
 
@@ -491,6 +534,7 @@ if __name__ == '__main__':
     mw = MainWindow()
     mw.show()
     if getconf:
+        threading.Thread(target=watch_urs_conf_update, args=(), daemon=True).start()
         threading.Thread(target=server_sock, daemon=True).start()
         threading.Thread(target=pg_check, args=(), daemon=True).start()
         threading.Thread(target=pg_set_db_check, args=(), daemon=True).start()
